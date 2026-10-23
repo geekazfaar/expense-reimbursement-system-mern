@@ -1,7 +1,7 @@
-
+const mongoose = require("mongoose");
 const express = require("express");
 const cors = require("cors");
-const pool = require ("./database/db");
+
 const authRoutes = require("./routes/authRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const claimRoutes = require("./routes/claimRoutes");
@@ -27,23 +27,24 @@ app.get("/", (req, res) => {
   });
 });
 
+
 app.get("/api/db-test", async (req, res) => {
-    try {
-      const result = await pool.query("SELECT NOW()");
-  
-      res.status(200).json({
-        success: true,
-        message: "Database connected successfully",
-        time: result.rows[0].now,
-      });
-    } catch (error) {
-      console.error("Database test failed:", error.message);
-  
-      res.status(500).json({
-        success: false,
-        message: "Database connection failed",
-      });
-    }
-  });
+  try {
+    await mongoose.connection.db.admin().ping();
+
+    return res.status(200).json({
+      success: true,
+      message: "MongoDB connected successfully",
+    });
+  } catch (error) {
+    console.error("Database test failed:", error.message);
+
+    return res.status(500).json({
+      success: false,
+      message: "MongoDB connection failed",
+    });
+  }
+});
+
 
 module.exports = app;

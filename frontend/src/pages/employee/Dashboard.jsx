@@ -81,6 +81,7 @@ function Dashboard({ onLogout })  {
         }
       };
     const [showCreateClaim, setShowCreateClaim] = useState(false);
+    const [claimsRefresh, setClaimsRefresh] = useState(0);
 
 const handleLogout = () => {
   dispatch(logout());
@@ -163,7 +164,7 @@ useEffect(() => {
     } else {
       setClaimsMessage("Please log in to view your claims.");
     }
-  }, [token]);
+  }, [token, claimsRefresh]);
   
 
 const [profile, setProfile] = useState({
@@ -280,7 +281,10 @@ const pendingCount = claims.filter(
   if (showCreateClaim) {
     return (
       <CreateClaim
-        onBack={() => setShowCreateClaim(false)}
+      onBack={() => {
+        setShowCreateClaim(false);
+        setClaimsRefresh((previous) => previous + 1);
+      }}
       />
     );
   }

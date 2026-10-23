@@ -13,8 +13,11 @@ const verifyToken = (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is not configured");
+    }
+    
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
     req.user = decoded;
 
     next();

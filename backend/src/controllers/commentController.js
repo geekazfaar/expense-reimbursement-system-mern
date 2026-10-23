@@ -1,4 +1,7 @@
-const pool = require("../database/db");
+const mongoose = require("mongoose");
+const Claim = require("../models/Claim");
+const Comment = require("../models/Comment");
+
 
 const addComment = async (req, res) => {
   try {
@@ -6,7 +9,13 @@ const addComment = async (req, res) => {
     const userId = req.user.id;
     const { comment } = req.body;
 
-    if (!comment || !comment.trim()) {
+    if (!mongoose.Types.ObjectId.isValid(claimId)) {
+      return res.status(400).json({
+        message: "Invalid claim ID",
+      });
+    }
+
+    if (typeof comment !== "string" || !comment.trim()) {
       return res.status(400).json({
         message: "Comment cannot be empty",
       });
@@ -14,82 +23,92 @@ const addComment = async (req, res) => {
 
     const isAdmin = req.user.role === "ADMIN";
 
-    const claimResult = await pool.query(
+    const claim = await Claim.findOne(
       isAdmin
-        ? "SELECT id FROM claims WHERE id = $1"
-        : "SELECT id FROM claims WHERE id = $1 AND user_id = $2",
-      isAdmin ? [claimId] : [claimId, userId]
+        ? { _id: claimId }
+        : { _id: claimId, user_id: userId }
     );
 
-    if (claimResult.rows.length === 0) {
+    if (!claim) {
       return res.status(404).json({
         message: "Claim not found",
       });
     }
 
-    const result = await pool.query(
-      `INSERT INTO comments (claim_id, user_id, message)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [claimId, userId, comment.trim()]
-    );
+    const newComment = await Comment.create({
+      claim_id: claimId,
+      user_id: userId,
+      message: comment.trim(),
+    });
 
     return res.status(201).json({
       message: "Comment added successfully",
-      comment: result.rows[0],
+      comment: {
+        id: newComment._id.toString(),
+        claim_id: newComment.claim_id.toString(),
+        user_id: newComment.user_id.toString(),
+        message: newComment.message,
+        created_at: newComment.created_at,
+      },
     });
   } catch (error) {
     console.error("Error adding comment:", error);
+
     return res.status(500).json({
       message: "Failed to add comment",
     });
   }
 };
-const getComments = async (req, res) => {
-    try {
-      const claimId = req.params.id;
-      const userId = req.user.id;
-  
-      const isAdmin = req.user.role === "ADMIN";
 
-      const claimResult = await pool.query(
-        isAdmin
-          ? "SELECT id FROM claims WHERE id = $1"
-          : "SELECT id FROM claims WHERE id = $1 AND user_id = $2",
-        isAdmin ? [claimId] : [claimId, userId]
-      );
-  
-      if (claimResult.rows.length === 0) {
-        return res.status(404).json({
-          message: "Claim not found",
-        });
-      }
-  
-      const result = await pool.query(
-        `SELECT
-           comments.id,
-           comments.claim_id,
-           comments.user_id,
-           comments.message,
-           comments.created_at,
-           users.full_name
-         FROM comments
-         JOIN users ON comments.user_id = users.id
-         WHERE comments.claim_id = $1
-         ORDER BY comments.created_at ASC`,
-        [claimId]
-      );
-  
-      return res.status(200).json({
-        comments: result.rows,
-      });
-    } catch (error) {
-      console.error("Error fetching comments:", error);
-      return res.status(500).json({
-        message: "Failed to fetch comments",
+
+const getComments = async (req, res) => {
+  try {
+    const claimId = req.params.id;
+    const userId = req.user.id;
+    const isAdmin = req.user.role === "ADMIN";
+
+    if (!mongoose.Types.ObjectId.isValid(claimId)) {
+      return res.status(400).json({
+        message: "Invalid claim ID",
       });
     }
-  };
+
+    const claim = await Claim.findOne(
+      isAdmin
+        ? { _id: claimId }
+        : { _id: claimId, user_id: userId }
+    );
+
+    if (!claim) {
+      return res.status(404).json({
+        message: "Claim not found",
+      });
+    }
+
+    const comments = await Comment.find({ claim_id: claimId })
+      .populate("user_id", "full_name")
+      .sort({ created_at: 1 })
+      .lean();
+
+    return res.status(200).json({
+      comments: comments.map((comment) => ({
+        id: comment._id.toString(),
+        claim_id: comment.claim_id.toString(),
+        user_id: comment.user_id?._id.toString() || null,
+        message: comment.message,
+        created_at: comment.created_at,
+        full_name: comment.user_id?.full_name || null,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching comments:", error);
+
+    return res.status(500).json({
+      message: "Failed to fetch comments",
+    });
+  }
+};
+
 module.exports = {
     addComment,
     getComments,

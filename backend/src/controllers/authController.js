@@ -1,6 +1,6 @@
-
-const pool = require("../database/db");
+const User = require("../models/User");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const registerUser = async (req, res) => {
   try {
@@ -15,26 +15,29 @@ const registerUser = async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const result = await pool.query(
-      `INSERT INTO users (full_name, email, password_hash, department, phone)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, full_name, email, department, phone, role, created_at`,
-      [
-        full_name.trim(),
-        email.trim().toLowerCase(),
-        passwordHash,
-        department || null,
-        phone || null,
-      ]
-    );
+    const user = await User.create({
+      full_name: full_name.trim(),
+      email: email.trim().toLowerCase(),
+      password_hash: passwordHash,
+      department: department || null,
+      phone: phone || null,
+    });
 
     return res.status(201).json({
       success: true,
       message: "User registered successfully",
-      user: result.rows[0],
+      user: {
+        id: user._id,
+        full_name: user.full_name,
+        email: user.email,
+        department: user.department,
+        phone: user.phone,
+        role: user.role,
+        created_at: user.created_at,
+      },
     });
   } catch (error) {
-    if (error.code === "23505") {
+    if (error.code === 11000) {
       return res.status(409).json({
         success: false,
         message: "Email is already registered",
@@ -51,8 +54,6 @@ const registerUser = async (req, res) => {
 };
 
 
-const jwt = require("jsonwebtoken");
-
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -64,21 +65,15 @@ const loginUser = async (req, res) => {
       });
     }
 
-    const result = await pool.query(
-      `SELECT id, full_name, email, password_hash, role, department, is_active
-       FROM users
-       WHERE email = $1`,
-      [email.trim().toLowerCase()]
-    );
-
-    if (result.rows.length === 0) {
+    const user = await User.findOne({
+      email: email.trim().toLowerCase(),
+    });
+    if (!user) {
       return res.status(401).json({
         success: false,
         message: "Invalid email or password",
       });
     }
-
-    const user = result.rows[0];
 
     if (!user.is_active) {
       return res.status(403).json({
@@ -104,7 +99,7 @@ const loginUser = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: user.id, role: user.role },
+      { id: user._id.toString(), role: user.role },
       process.env.JWT_SECRET,
       { expiresIn: "1h" }
     );
@@ -114,7 +109,7 @@ const loginUser = async (req, res) => {
       message: "Login successful",
       token,
       user: {
-        id: user.id,
+        id: user._id.toString(),
         full_name: user.full_name,
         email: user.email,
         role: user.role,

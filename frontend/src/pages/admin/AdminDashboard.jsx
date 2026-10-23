@@ -16,6 +16,9 @@ export default function AdminDashboard({ onLogout }) {
   const [processingId, setProcessingId] = useState(null);
   const [budgets, setBudgets] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [categoryName, setCategoryName] = useState("");
+const [categoryDescription, setCategoryDescription] = useState("");
+const [categoryMessage, setCategoryMessage] = useState("");
 const [budgetCategoryId, setBudgetCategoryId] = useState("1");
 const [budgetYear, setBudgetYear] = useState("2026");
 const [annualLimit, setAnnualLimit] = useState("");
@@ -102,14 +105,54 @@ const fetchCategories = async () => {
         throw new Error(data.message || "Failed to fetch categories");
       }
   
-      setCategories(data.categories);
+      setCategories(
+        data.categories.map((category) => ({
+          ...category,
+          id: category._id || category.id,
+        }))
+      );
     } catch (error) {
       setBudgetMessage(error.message);
     }
   };
   
+  const handleCreateCategory = async (event) => {
+    event.preventDefault();
+    setCategoryMessage("");
+  
+    try {
+      const response = await fetch(`${API}/categories`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: categoryName,
+          description: categoryDescription,
+        }),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        throw new Error(data.message || "Failed to create category");
+      }
+  
+      setCategoryMessage(data.message || "Category created successfully!");
+      setCategoryName("");
+      setCategoryDescription("");
+      await fetchCategories();
+    } catch (error) {
+      setCategoryMessage(error.message || "Unable to create category");
+    }
+  };
+
   const handleSaveBudget = async (event) => {
     event.preventDefault();
+    console.log("Category ID:", budgetCategoryId);
+console.log("Budget year:", budgetYear);
+console.log("Annual limit:", annualLimit);
     setBudgetMessage("");
   
     try {
@@ -120,7 +163,7 @@ const fetchCategories = async () => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          category_id: Number(budgetCategoryId),
+          category_id: budgetCategoryId,
           budget_year: Number(budgetYear),
           annual_limit: Number(annualLimit),
         }),
@@ -371,6 +414,38 @@ useEffect(() => {
         <div>Rejected: <strong>{rejectedCount}</strong></div>
       </div>
 
+      <h2>Create Category</h2>
+
+<form
+  onSubmit={handleCreateCategory}
+  style={{
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+    maxWidth: "400px",
+    marginBottom: "24px",
+  }}
+>
+  <input
+    type="text"
+    placeholder="Category name"
+    value={categoryName}
+    onChange={(e) => setCategoryName(e.target.value)}
+    required
+  />
+
+  <textarea
+    placeholder="Category description"
+    value={categoryDescription}
+    onChange={(e) => setCategoryDescription(e.target.value)}
+    rows={3}
+  />
+
+  <button type="submit">Create Category</button>
+
+  {categoryMessage && <p role="status">{categoryMessage}</p>}
+</form>
+
 
       <h2>Annual Budget Management</h2>
 
@@ -389,11 +464,14 @@ useEffect(() => {
   value={budgetCategoryId}
   onChange={(e) => setBudgetCategoryId(e.target.value)}
 >
-  {categories.map((category) => (
-    <option key={category.id} value={category.id}>
-      {category.name}
-    </option>
-  ))}
+{categories.map((category) => (
+  <option
+    key={category._id || category.id}
+    value={category._id || category.id}
+  >
+    {category.name}
+  </option>
+))}
 </select>
 
 
